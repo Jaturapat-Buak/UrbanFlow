@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BKK Pulse-Alert: Predictive Navigation Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Kanit', sans-serif; }
+        .suggestion-box { max-height: 180px; overflow-y: auto; z-index: 2000; }
+    </style>
+</head>
+<body class="bg-[#0f172a] text-slate-200 h-screen flex flex-col overflow-hidden">
+
+    <header class="bg-[#1e293b] border-b border-slate-800 px-6 py-3 shadow-md z-10 flex justify-between items-center">
+        <div>
+            <h1 class="text-lg font-semibold text-white">⛈️ BKK Pulse-Alert <span class="text-xs bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full ml-2 font-mono">📡 Predictive AI Mode</span></h1>
+            <p class="text-xs text-slate-400 mt-0.5">ระบบนำทางอัจฉริยะคาดการณ์ความเสี่ยงล่วงหน้า (ประเมินกลุ่มฝน + พื้นที่ลุ่มต่ำ/ท่วมซ้ำซาก)</p>
+        </div>
+    </header>
+
+    <main class="flex flex-1 overflow-hidden">
+        
+        <section class="w-80 bg-[#1e293b] border-r border-slate-800 flex flex-col shadow-2xl z-10 overflow-y-auto">
+            
+            <div class="p-4 bg-slate-900 border-b border-slate-800 space-y-2">
+                <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">🌐 พิกัดจริง (Real Location)</h3>
+                <button id="btn-real-location" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-[11px] py-1.5 px-2 rounded transition shadow font-medium flex justify-center items-center gap-1">
+                    📍 ค้นหาและกลับมาตำแหน่งจริงของฉัน
+                </button>
+            </div>
+
+            <div class="p-4 bg-slate-900 border-b border-slate-800 space-y-2">
+                <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">🧪 แผงพิกัดจำลอง (Test Radar)</h3>
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    <button id="btn-test-near" class="bg-amber-600 hover:bg-amber-500 text-white text-[11px] py-1.5 px-2 rounded transition shadow font-medium col-span-2">
+                        📍 ใกล้รัชดา-ศาลอาญา (สภาวะเฝ้าระวัง/วิกฤต คาดการณ์)
+                    </button>
+                    <button id="btn-test-flood" class="bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-200 text-[11px] py-1.5 px-2 rounded transition shadow font-medium col-span-2 flex justify-center items-center gap-1">
+                        🚨 จำลอง: บางนา (น้ำท่วมขังจริง สีแดงเข้ม)
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4 border-b border-slate-800 space-y-3.5">
+                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">🗺️ วางแผนและวิเคราะห์เส้นทาง</h3>
+                <div class="relative">
+                    <label class="block text-[11px] text-slate-400 mb-1">📍 จุดเริ่มต้นเดินทาง</label>
+                    <div class="flex gap-1.5">
+                        <input id="input-start" type="text" placeholder="ค้นหาจุดเริ่มต้น..." class="w-full bg-[#0f172a] border border-slate-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                        <button id="btn-current-location" class="hidden bg-blue-600/20 text-blue-400 px-2.5 rounded border border-blue-500/30 text-xs">🎯</button>
+                    </div>
+                    <div id="start-suggestions" class="suggestion-box absolute left-0 right-0 mt-1 bg-[#1e293b] border border-slate-700 rounded shadow-2xl hidden"></div>
+                </div>
+
+                <div class="relative">
+                    <label class="block text-[11px] text-slate-400 mb-1">🏁 จุดหมายปลายทาง</label>
+                    <input id="input-end" type="text" placeholder="ค้นหาปลายทาง..." class="w-full bg-[#0f172a] border border-slate-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                    <div id="end-suggestions" class="suggestion-box absolute left-0 right-0 mt-1 bg-[#1e293b] border border-slate-700 rounded shadow-2xl hidden"></div>
+                </div>
+
+                <button id="btn-search-route" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs py-2 rounded transition shadow-lg flex items-center justify-center mt-2">
+                    🔍 คำนวณเส้นทาง OSRM
+                </button>
+                <div id="route-distance-ui" class="text-center text-[11px] font-mono text-slate-400 bg-slate-900/40 py-1 rounded">ระยะทาง 0.00 กม.</div>
+            </div>
+
+            <div class="p-4 border-b border-slate-800 space-y-2">
+                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">📡 สแกนเนอร์รอบตัว 2 กม.</h3>
+                <div id="proximity-alert-box" class="space-y-2">
+                    <p class="text-[11px] text-slate-500 italic">รอการระบุพิกัด...</p>
+                </div>
+            </div>
+
+            <div class="p-4 border-b border-slate-800 space-y-2.5">
+                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">📊 เกณฑ์ประเมินล่วงหน้า & สถานการณ์จริง</h3>
+                <div class="space-y-1.5 text-[11px] text-slate-300">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-3.5 h-3.5 rounded-full bg-[#7f1d1d] border border-white/20 inline-block"></span>
+                        <span>🚨 <b class="text-red-300">น้ำท่วมขังจริง:</b> วิกฤตสูงสุด รถเล็กผ่านไม่ได้ (สีแดงเข้ม)</span>
+                    </div>
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-3.5 h-3.5 rounded-full bg-[#ef4444] border border-white/20 inline-block"></span>
+                        <span>🔴 <b>เสี่ยงวิกฤต:</b> เสี่ยงท่วมฉับพลันสูงมาก (ฝนตกหนัก+ลุ่มต่ำ)</span>
+                    </div>
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-3.5 h-3.5 rounded-full bg-[#f97316] border border-white/20 inline-block"></span>
+                        <span>🟠 <b>เฝ้าระวังสูง:</b> กลุ่มฝนเข้าพื้นที่เสี่ยง/น้ำเริ่มเอ่อ</span>
+                    </div>
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-3.5 h-3.5 rounded-full bg-[#eab308] border border-white/20 inline-block"></span>
+                        <span>🟡 <b>เตือนภัย:</b> มีกลุ่มฝนกำลังผ่าน หรือ พื้นที่ลุ่มต่ำ</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 flex-1 flex flex-col min-h-[160px] space-y-1.5 bg-slate-900/30">
+                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">📋 รายงานเส้นทาง</h3>
+                <div id="api-output-log" class="text-[11px] text-slate-400 bg-slate-900 border border-slate-800 p-2.5 rounded flex-1 overflow-y-auto leading-relaxed">
+                    ระบบพร้อมทำงาน... กรุณาระบุต้นทางและปลายทางเพื่อนำทาง
+                </div>
+            </div>
+
+        </section>
+
+        <section class="flex-1 relative bg-slate-950">
+            <div id="map" class="w-full h-full"></div>
+        </section>
+
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
